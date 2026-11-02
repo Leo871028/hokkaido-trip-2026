@@ -1,0 +1,29 @@
+name: Keep Supabase project active
+
+on:
+  schedule:
+    # Three checks per day, UTC (GitHub Actions cron uses UTC).
+    - cron: '17 1,9,17 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query packing database through Supabase REST API
+        env:
+          SUPABASE_URL: https://kexegtoymnxknjdtqpdr.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_84r-ULY42catTN9BMHKKRg_QQrXNvQN
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-delay 5 --max-time 30 \
+            -H "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+            -H "Accept: application/json" \
+            "${SUPABASE_URL}/rest/v1/hokkaido_packing_progress?select=user_id&limit=1" \
+            -o /dev/null
+          echo "Supabase database responded successfully."
