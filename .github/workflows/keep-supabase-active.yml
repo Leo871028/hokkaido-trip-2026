@@ -2,7 +2,7 @@ name: Keep Supabase project active
 
 on:
   schedule:
-    # Three checks per day, UTC (GitHub Actions cron uses UTC).
+    # GitHub cron runs in UTC; 09:17, 17:17 and 01:17 Taiwan time.
     - cron: '17 1,9,17 * * *'
   workflow_dispatch:
 
@@ -14,16 +14,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Query packing database through Supabase REST API
+      - name: Check Supabase connection configuration
         env:
-          SUPABASE_URL: https://kexegtoymnxknjdtqpdr.supabase.co
-          SUPABASE_PUBLISHABLE_KEY: sb_publishable_84r-ULY42catTN9BMHKKRg_QQrXNvQN
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Set repository Actions secrets SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY using the current project's Connect / Settings > API Keys values."
+            exit 1
+          fi
+
+      - name: Check Supabase Data API with a read-only request
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error \
-            --retry 3 --retry-delay 5 --max-time 30 \
+          URL="${SUPABASE_URL%/}/rest/v1/hokkaido_booking_progress?select=item_id&limit=1"
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+          status="$(curl --silent --show-error --location --retry 2 --retry-delay 3 --max-time 25 \
+            --output "$response_file" --write-out '%{http_code}' \
             -H "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
             -H "Accept: application/json" \
-            "${SUPABASE_URL}/rest/v1/hokkaido_packing_progress?select=user_id&limit=1" \
-            -o /dev/null
-          echo "Supabase database responded successfully."
+            "$URL")"
+          if [ "$status" = "200" ] || [ "$status" = "206" ]; then
+            echo "Supabase Data API responded with HTTP $status."
+          else
+            echo "::error::Supabase Data API returned HTTP $status. Confirm current project URL, publishable key, and anonymous SELECT grants / RLS for hokkaido_booking_progress."
+            echo "Error body (may include diagnostic details):"
+            head -c 1500 "$response_file"
+            echo
+            exit 1
+          fi
