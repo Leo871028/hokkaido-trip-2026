@@ -2,8 +2,8 @@ name: Keep Supabase project active
 
 on:
   schedule:
-    # GitHub cron runs in UTC; 09:17, 17:17 and 01:17 Taiwan time.
-    - cron: '17 1,9,17 * * *'
+    # Daily at 12:00 Taiwan time (04:00 UTC).
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 permissions:
